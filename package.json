@@ -1,0 +1,14 @@
+{
+  "name": "value-extractor",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "typecheck": "pnpm -r typecheck",
+    "migrate": "pnpm --filter server migrate",
+    "bg:start": "bash scripts/bg.sh start",
+    "bg:stop": "bash scripts/bg.sh stop",
+    "bg:restart": "bash scripts/bg.sh restart",
+    "bg:status": "bash scripts/bg.sh status",
+    "bg:logs": "bash scripts/bg.sh logs"
+  }
+}

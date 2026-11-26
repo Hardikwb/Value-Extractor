@@ -1,0 +1,7 @@
+packages:
+  - server
+  - web
+allowBuilds:
+  sharp: true
+  esbuild: true
+  protobufjs: true
