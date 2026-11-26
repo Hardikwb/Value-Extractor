@@ -69,4 +69,7 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS finish_reason text NOT NULL DEFAUL
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 UPDATE chats c SET updated_at = GREATEST(c.created_at, COALESCE((SELECT max(m.created_at) FROM messages m WHERE m.chat_id = c.id), c.created_at))
-WHERE c.updated_at > now() - interval '1 minute'
+WHERE c.updated_at > now() - interval '1 minute';
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS user_description text NOT NULL DEFAULT '';
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS user_notes text NOT NULL DEFAULT '';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS mode text

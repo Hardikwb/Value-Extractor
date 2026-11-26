@@ -2,6 +2,8 @@ import { query, toVector } from "../db/client.js";
 import { formatTime } from "./chunker.js";
 import { EMBED_MODEL_ID, embedQuery } from "./embeddings.js";
 import { complete, streamChat, type ChatMsg } from "./llm.js";
+import { factsSection, notesSection, numberSentences } from "./interview.js";
+import { effectiveMode, modeInstructions, modelQuestion, type Mode } from "./modes.js";
 import { buildContinuation, clipHistory, isGlobalQuestion, needsRewrite, rrf, toTsQuery, type Turn } from "./retrieval-utils.js";
 
 const DEBUG = !!process.env.DEBUG_RAG;
@@ -111,12 +113,15 @@ interface OverviewRow extends VideoRow {
   author: string;
   links: { label: string; url: string; resolved_url?: string; is_github?: boolean }[];
   speakers: { name: string; role: string }[] | null;
+  user_description: string;
+  user_notes: string;
 }
 
-async function videoOverview(videoId: string | null, withBreakdown: boolean, breakdownChars = BREAKDOWN_CHARS): Promise<string> {
+async function videoOverview(videoId: string | null, withBreakdown: boolean, breakdownChars = BREAKDOWN_CHARS, notesScale = 1): Promise<string> {
   if (videoId) {
     const [v] = await query<OverviewRow>(
-      `SELECT id, title, category, summary, outline, deep_summary, author, links, insights->'speakers' AS speakers
+      `SELECT id, title, category, summary, outline, deep_summary, author, links, insights->'speakers' AS speakers,
+              user_description, user_notes
        FROM videos WHERE id = $1`, [videoId]);
     if (!v) return "";
     const lines = [`Video: ${v.title}`];
@@ -127,6 +132,8 @@ async function videoOverview(videoId: string | null, withBreakdown: boolean, bre
       lines.push("Links from the video description:");
       for (const l of v.links.slice(0, 10)) lines.push(`- ${l.label}: ${l.resolved_url ?? l.url}${l.is_github ? " (GitHub repository)" : ""}`);
     }
+    const mine = notesSection(v.user_description, v.user_notes, notesScale); // the user's own words, for every question
+    if (mine) lines.push(`\n${mine}`);
     if (withBreakdown) {
       if (v.deep_summary) lines.push(`\n${BREAKDOWN_MARKER} (from the transcript and description):\n${v.deep_summary.slice(0, breakdownChars)}`);
       else if (v.outline) lines.push(`\n${BREAKDOWN_MARKER} (approximate section summaries):\n${v.outline}`);
@@ -136,6 +143,14 @@ async function videoOverview(videoId: string | null, withBreakdown: boolean, bre
   const vs = await query<VideoRow>(
     "SELECT id, title, category, summary, outline FROM videos WHERE status = 'ready' ORDER BY created_at DESC LIMIT 20");
   return vs.length ? "Videos in the library:\n" + vs.map((v) => `- ${v.title} (${v.category}): ${v.summary}`).join("\n") : "";
+}
+
+/** The video's own words (description + transcript) and its number-bearing sentences, for interview mode and its checks. */
+export async function interviewMaterial(videoId: string): Promise<{ text: string; facts: string[] }> {
+  const [src] = await query<{ description: string; transcript: string | null }>(
+    `SELECT v.description, (SELECT string_agg(c.text, ' ' ORDER BY c.idx) FROM transcript_chunks c WHERE c.video_id = v.id) AS transcript FROM videos v WHERE v.id = $1`, [videoId]);
+  const text = `${src?.description ?? ""} ${(src?.transcript ?? "").slice(0, 60000)}`;
+  return { text, facts: numberSentences(text) };
 }
 
 const SYSTEM = `You answer questions about technical YouTube videos for a developer. The material below is all you know about what the video says.
@@ -164,11 +179,15 @@ export async function* answer(opts: {
   onFinish?: (reason: string) => void;
   /** use a smaller prompt (after a "request too large" error) */
   compact?: boolean;
+  /** the answer-type tag chosen in the chat bar (or null for a normal answer) */
+  mode?: Mode | null;
 }): AsyncGenerator<string> {
   const scale = opts.compact ? COMPACT : 1;
   const history = clipHistory(opts.history, opts.compact ? 4 : 6);
-  const global = isGlobalQuestion(opts.question);
-  const overviewP = timed("overview", () => videoOverview(opts.videoId, global, Math.round(BREAKDOWN_CHARS * scale))); // outline only for whole-video questions // runs while we rewrite/search
+  const mode = effectiveMode(opts.mode, opts.question);
+  const interview = mode === "interview";
+  const global = mode !== null || isGlobalQuestion(opts.question); // a tag always works from the whole-video breakdown
+  const overviewP = timed("overview", () => videoOverview(opts.videoId, global, Math.round(BREAKDOWN_CHARS * scale), scale)); // outline only for whole-video questions // runs while we rewrite/search
   const search = global ? opts.question : await timed("rewrite", () => standaloneQuestion(opts.question, history));
 
   let overview: string;
@@ -186,17 +205,25 @@ export async function* answer(opts: {
   if (overview) parts.push(`## About the video\n${overview}`);
   if (passages.length) parts.push(`## Transcript passages\n${passages.join("\n\n")}`);
   else if (!haveOutline) parts.push("## Transcript passages\n(no passage matched this question closely)");
+  if (mode) {
+    if (opts.videoId) {
+      const facts = factsSection((await interviewMaterial(opts.videoId)).facts); // figures are copied, not paraphrased
+      if (facts) parts.push(facts);
+    }
+    parts.push(modeInstructions(mode)); // last, so it is freshest when the model starts writing
+  }
   const system: ChatMsg = { role: "system", content: parts.join("\n\n") };
 
   if (DEBUG) {
     console.log(`[rag] global=${global} search="${search}" passages=${passages.length} systemChars=${system.content.length}`);
   }
-  const base: ChatMsg[] = [system, ...history, { role: "user", content: opts.question }];
+  const base: ChatMsg[] = [system, ...history, { role: "user", content: modelQuestion(mode, opts.question) }];
   const messages = opts.continueFrom ? (buildContinuation(base, opts.continueFrom) as ChatMsg[]) : base;
   const t0 = Date.now();
   let first = true;
   // Whole-video answers are assembled from a ready-made breakdown, so they need little reasoning and a bigger budget.
-  const streamOpts = { signal: opts.signal, onFinish: opts.onFinish, effort: global ? "low" : undefined, maxTokens: global ? 8000 : 6000 };
+  const streamOpts = { signal: opts.signal, onFinish: opts.onFinish, effort: mode === "interview" || mode === "summary" ? "medium" : global ? "low" : undefined, // designing good questions needs more reasoning than restating a summary
+     maxTokens: global ? 8000 : 6000 };
   for await (const d of streamChat(messages, streamOpts)) {
     if (first && DEBUG) { console.log(`[rag] first token after ${Date.now() - t0}ms`); first = false; }
     yield d;

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { LIST_COLS } from "../db/columns.js";
 import { query } from "../db/client.js";
 import { IngestError, requeue, startIngest } from "../services/ingest.js";
+import { NOTES_LIMITS } from "../services/interview.js";
 import { refreshOverview, runInsights } from "../services/insights.js";
 
 export const videos = Router();
@@ -10,8 +11,10 @@ export const videos = Router();
 // Adding a video returns at once; the work (and its progress) lives in the background and in the video's row.
 videos.post("/", async (req, res, next) => {
   try {
-    const { url } = z.object({ url: z.string().min(1) }).parse(req.body);
-    res.status(202).json(await startIngest(url));
+    const { url, description, notes } = z
+      .object({ url: z.string().min(1), description: z.string().max(NOTES_LIMITS.description * 2).optional(), notes: z.string().max(8000).optional() })
+      .parse(req.body);
+    res.status(202).json(await startIngest(url, { description: description?.trim(), notes: notes?.trim() }));
   } catch (e) {
     if (e instanceof IngestError) return void res.status(e.status).json({ error: e.message });
     next(e);
@@ -31,8 +34,21 @@ videos.get("/", async (req, res, next) => {
 // One video including the full breakdown.
 videos.get("/:id", async (req, res, next) => {
   try {
-    const [v] = await query(`SELECT ${LIST_COLS}, deep_summary FROM videos WHERE id = $1`, [req.params.id]);
+    const [v] = await query(`SELECT ${LIST_COLS}, deep_summary, user_description, user_notes FROM videos WHERE id = $1`, [req.params.id]);
     v ? res.json(v) : res.status(404).json({ error: "Not found" });
+  } catch (e) { next(e); }
+});
+
+// The user's own description and notes for a video; they are used as context when answering about it.
+videos.put("/:id/notes", async (req, res, next) => {
+  try {
+    const { description, notes } = z
+      .object({ description: z.string().max(NOTES_LIMITS.description * 2).default(""), notes: z.string().max(8000).default("") })
+      .parse(req.body);
+    const [row] = await query(
+      "UPDATE videos SET user_description = $2, user_notes = $3 WHERE id = $1 RETURNING user_description, user_notes",
+      [req.params.id, description.trim(), notes.trim()]);
+    row ? res.json(row) : res.status(404).json({ error: "Not found" });
   } catch (e) { next(e); }
 });
 

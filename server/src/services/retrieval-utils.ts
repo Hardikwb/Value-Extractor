@@ -1,4 +1,5 @@
 // Pure helpers (no DB / env access) so they can be unit tested.
+import { isInterviewRequest } from "./interview.js";
 
 export interface Turn { role: "user" | "assistant"; content: string }
 
@@ -19,7 +20,7 @@ const GLOBAL_RE = new RegExp(
 
 /** Questions about the whole video, which similarity search over a few chunks cannot answer. */
 export function isGlobalQuestion(q: string): boolean {
-  return GLOBAL_RE.test(q);
+  return GLOBAL_RE.test(q) || isInterviewRequest(q); // interview questions are designed from the whole video
 }
 
 /** Keep the last `maxTurns` messages and clip long assistant replies to protect the token budget. */

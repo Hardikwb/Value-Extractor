@@ -32,16 +32,16 @@ export async function requeue(id: string): Promise<void> {
  * Fast part of adding a video: validate, create the row (or re-queue an existing one) and hand the work to
  * the background queue. Returns the video row straight away; progress is read from it afterwards.
  */
-export async function startIngest(url: string): Promise<Record<string, any>> {
+export async function startIngest(url: string, mine: { description?: string; notes?: string } = {}): Promise<Record<string, any>> {
   const youtubeId = extractVideoId(url);
   if (!youtubeId) throw new IngestError("Not a valid YouTube URL");
 
   // One round trip for a new video. ON CONFLICT also closes the race between two simultaneous requests.
   const [created] = await query(
-    `INSERT INTO videos (youtube_id, url, title, status, embed_model, stage, progress, stage_label, job_heartbeat)
-     VALUES ($1, $2, 'Loading video…', 'processing', $3, 'queued', 0, $4, now())
+    `INSERT INTO videos (youtube_id, url, title, status, embed_model, stage, progress, stage_label, job_heartbeat, user_description, user_notes)
+     VALUES ($1, $2, 'Loading video…', 'processing', $3, 'queued', 0, $4, now(), $5, $6)
      ON CONFLICT (youtube_id) DO NOTHING RETURNING ${LIST_COLS}`,
-    [youtubeId, `https://www.youtube.com/watch?v=${youtubeId}`, EMBED_MODEL_ID, stageLabel("queued")],
+    [youtubeId, `https://www.youtube.com/watch?v=${youtubeId}`, EMBED_MODEL_ID, stageLabel("queued"), mine.description ?? "", mine.notes ?? ""],
   );
   if (created) {
     queueIngest(created.id);
@@ -51,6 +51,10 @@ export async function startIngest(url: string): Promise<Record<string, any>> {
   const [existing] = await query(`SELECT ${LIST_COLS}, embed_model FROM videos WHERE youtube_id = $1`, [youtubeId]);
   if (!existing || existing.status === "processing") throw new IngestError("This video is already being processed.", 409);
   const { embed_model, ...row } = existing;
+  // Adding a video that is already in the library with notes attaches the notes to it.
+  if (mine.description || mine.notes) {
+    await query("UPDATE videos SET user_description = $2, user_notes = $3 WHERE id = $1", [row.id, mine.description ?? "", mine.notes ?? ""]);
+  }
   // Failed earlier, or indexed with an older embedding model: process again in place (chats are kept).
   if (row.status === "failed" || embed_model !== EMBED_MODEL_ID) {
     await requeue(row.id);

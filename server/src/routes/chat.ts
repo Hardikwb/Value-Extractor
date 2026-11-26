@@ -5,6 +5,7 @@ import {
   abortChatGenerations, continueGeneration, startGeneration, stopGeneration, subscribe, type Live,
 } from "../chat/generation.js";
 import { defaultTitle, modelHistory } from "../chat/generation-utils.js";
+import { defaultQuestion, MODES } from "../services/modes.js";
 
 export const chats = Router();
 
@@ -41,7 +42,7 @@ chats.get("/", async (_req, res, next) => {
 chats.get("/:id/messages", async (req, res, next) => {
   try {
     res.json(await query(
-      "SELECT id, role, content, status, error, created_at FROM messages WHERE chat_id = $1 ORDER BY id", [req.params.id]));
+      "SELECT id, role, content, status, error, mode, created_at FROM messages WHERE chat_id = $1 ORDER BY id", [req.params.id]));
   } catch (e) { next(e); }
 });
 
@@ -74,9 +75,18 @@ function watch(res: Response, g: Live, meta?: Record<string, unknown>): void {
 
 chats.post("/:id/messages", async (req, res, next) => {
   try {
-    const { content, editFromId } = z
-      .object({ content: z.string().min(1).max(20000), editFromId: z.coerce.number().int().positive().optional() })
+    const body = z
+      .object({
+        content: z.string().max(20000).default(""),
+        editFromId: z.coerce.number().int().positive().optional(),
+        mode: z.enum(MODES as [string, ...string[]]).nullish(),
+      })
       .parse(req.body);
+    const mode = (body.mode ?? null) as import("../services/modes.js").Mode | null;
+    const editFromId = body.editFromId;
+    // A tag can be sent with no text; then the tag's own request is stored as the question.
+    const content = body.content.trim() || (mode ? defaultQuestion(mode) : "");
+    if (!content) return void res.status(400).json({ error: "Write a question or choose a tag." });
     const chatId = req.params.id;
 
     // Editing a message removes it and everything after it, then asks again.
@@ -106,14 +116,14 @@ chats.post("/:id/messages", async (req, res, next) => {
     const history = modelHistory(rows.reverse()).map(({ role, content }) => ({ role, content }));
     const [saved, , ] = await Promise.all([
       query<{ id: number; role: string }>(
-        `INSERT INTO messages (chat_id, role, content, status) VALUES ($1, 'user', $2, 'done'), ($1, 'assistant', '', 'generating') RETURNING id, role`,
-        [chatId, content]),
+        `INSERT INTO messages (chat_id, role, content, status, mode) VALUES ($1, 'user', $2, 'done', $3::text), ($1, 'assistant', '', 'generating', NULL) RETURNING id, role`,
+        [chatId, content, mode]),
       query("UPDATE chats SET updated_at = now(), title = CASE WHEN title = 'New chat' THEN $2 ELSE title END WHERE id = $1", [chatId, defaultTitle(content)]),
     ]);
     const userId = saved.find((r) => r.role === "user")!.id;
     const assistantId = saved.find((r) => r.role === "assistant")!.id;
 
-    const g = startGeneration({ assistantId, chatId, videoId: chat.video_id, question: content, history, firstAnswer: history.length === 0 });
+    const g = startGeneration({ assistantId, chatId, videoId: chat.video_id, question: content, history, firstAnswer: history.length === 0, mode });
     watch(res, g, { userId, assistantId });
   } catch (e) { next(e); }
 });
