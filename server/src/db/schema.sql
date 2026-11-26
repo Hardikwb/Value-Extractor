@@ -72,4 +72,6 @@ UPDATE chats c SET updated_at = GREATEST(c.created_at, COALESCE((SELECT max(m.cr
 WHERE c.updated_at > now() - interval '1 minute';
 ALTER TABLE videos ADD COLUMN IF NOT EXISTS user_description text NOT NULL DEFAULT '';
 ALTER TABLE videos ADD COLUMN IF NOT EXISTS user_notes text NOT NULL DEFAULT '';
-ALTER TABLE messages ADD COLUMN IF NOT EXISTS mode text
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS mode text;
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS transcript_lang text NOT NULL DEFAULT '';
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS transcript_translated boolean NOT NULL DEFAULT false

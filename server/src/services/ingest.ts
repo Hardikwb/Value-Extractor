@@ -8,7 +8,8 @@ import { chunkTranscript } from "./chunker.js";
 import { EMBED_MODEL_ID, embedDocs } from "./embeddings.js";
 import { INSIGHTS_VERSION } from "./insights-utils.js";
 import { runInsights } from "./insights.js";
-import { extractVideoId, fetchTitle, fetchTranscript, friendlyTranscriptError } from "./youtube.js";
+import { loadTranscript } from "./transcript.js";
+import { extractVideoId, fetchTitle, friendlyTranscriptError } from "./youtube.js";
 
 export class IngestError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -71,9 +72,9 @@ export async function processVideo(id: string): Promise<void> {
   await withJob(id, async (r) => {
     try {
       r.report({ stage: "transcript" });
-      let segments;
+      let segments, source;
       try {
-        segments = await fetchTranscript(v.youtube_id);
+        ({ segments, source } = await loadTranscript(v.youtube_id));
       } catch (e: any) {
         throw new IngestError(`Could not read the transcript. ${friendlyTranscriptError(e)}`, 422);
       }
@@ -85,7 +86,7 @@ export async function processVideo(id: string): Promise<void> {
 
       r.report({ stage: "categorizing" });
       const meta = await categorize(title, segments.map((s) => s.text).join(" "));
-      await query("UPDATE videos SET title = $2, category = $3, tags = $4, summary = $5 WHERE id = $1", [id, title, meta.category, meta.tags, meta.summary]);
+      await query("UPDATE videos SET title = $2, category = $3, tags = $4, summary = $5, transcript_lang = $6, transcript_translated = $7 WHERE id = $1", [id, title, meta.category, meta.tags, meta.summary, source.lang, source.translated]);
       r.assertAlive();
 
       const chunks = chunkTranscript(segments);

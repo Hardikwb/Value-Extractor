@@ -9,7 +9,8 @@ import {
   INSIGHTS_VERSION, mergeNamed, norm, numberIsGrounded, parseChapters, parseLinks, parseProductsMentioned,
   type Insights, type LinkInfo, type Section, type SectionInsight,
 } from "./insights-utils.js";
-import { fetchTranscript, type TranscriptSegment } from "./youtube.js";
+import { loadTranscript } from "./transcript.js";
+import type { TranscriptSegment } from "./youtube.js";
 
 const DEBUG = !!process.env.DEBUG_RAG;
 const SECTION_CHARS = 7000;
@@ -118,7 +119,7 @@ async function buildInsights(video: VideoRow, given?: TranscriptSegment[]): Prom
   );
 
   // 2. Transcript, speakers, glossary and the text every extracted name is checked against.
-  const segments = given ?? (await fetchTranscript(video.youtube_id));
+  const segments = given ?? (await loadTranscript(video.youtube_id)).segments;
   const speakers = await extractSpeakers(meta.description).catch(() => []);
   const glossary = [...new Set([...products, ...speakers.map((s) => s.name)])];
   const fullText = segments.map((s) => s.text).join(" ");
