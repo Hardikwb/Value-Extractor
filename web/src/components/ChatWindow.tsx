@@ -12,6 +12,9 @@ const SUGGESTIONS = [
   "What are the key practices and rules the speakers recommend?",
 ];
 
+/** Designs interview questions from the video (and the user's notes); the server recognises it as interview mode. */
+const INTERVIEW_PROMPT = "Interview prep: the top 5 innovative, critical, high-level thinking questions from this video";
+
 type Props = { chat: Chat; video: Video | null; onNewChat: () => void; onUpdated: () => void };
 
 export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
@@ -78,6 +81,7 @@ export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
         onMeta: ({ userId, assistantId }) =>
           setMessages((ms) => ms.map((m, i) => (i === ms.length - 2 ? { ...m, id: userId } : i === ms.length - 1 ? { ...m, id: assistantId } : m))),
         onDelta: (d) => patchLast((m) => ({ ...m, content: m.content + d })),
+        onReplace: (text) => patchLast((m) => ({ ...m, content: text })),
       }, editFromId);
       finish(end);
     } catch (err) {
@@ -102,6 +106,7 @@ export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
     try {
       const end = await continueMessage(chat.id, m.id, {
         onDelta: (d) => setMessages((ms) => ms.map((x) => (x.id === m.id ? { ...x, content: x.content + d } : x))),
+        onReplace: (text) => setMessages((ms) => ms.map((x) => (x.id === m.id ? { ...x, content: text } : x))),
       });
       if (end) setMessages((ms) => ms.map((x) => (x.id === m.id ? { ...x, status: end.status, error: end.error } : x)));
       else void reload();
@@ -171,6 +176,12 @@ export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
                   <button key={s} onClick={() => send(s)}>{s}</button>
                 ))}
               </div>
+              {video && (
+                <button className="suggest-wide" onClick={() => send(INTERVIEW_PROMPT)}>
+                  <span className="tag">Interview prep</span>
+                  The top 5 innovative, critical, high-level thinking questions from this video
+                </button>
+              )}
             </div>
           )}
           {messages.map((m, i) => {

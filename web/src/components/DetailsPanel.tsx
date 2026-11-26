@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Video } from "../api";
 import { Markdown } from "./Markdown";
+import { NotesEditor } from "./NotesEditor";
 
 /** Full breakdown of a video: resources (with GitHub flagged) and the detailed, timestamped summary. */
 export function DetailsPanel({ video, onUpdated }: { video: Video; onUpdated: () => void }) {
@@ -28,6 +29,7 @@ export function DetailsPanel({ video, onUpdated }: { video: Video; onUpdated: ()
   const links = full.links ?? [];
   return (
     <div className="details">
+      <NotesEditor video={full} />
       {links.length > 0 && (
         <div className="reslinks">
           {links.map((l) => (

@@ -204,3 +204,17 @@ main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .morechats:hover { color: var(--text); }
 .chatrow.nested { margin-left: 14px; }
 .chatrow.nested .ctitle { font-size: .82rem; color: var(--muted); }
+
+/* interview chip and notes */
+.suggest-wide { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 10px; text-align: left; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 12px; padding: 13px 16px; line-height: 1.4; color: var(--text); }
+.suggest-wide:hover { box-shadow: 0 0 0 3px var(--accent-soft); }
+.suggest-wide .tag { flex: none; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #fff; background: var(--accent); border-radius: 999px; padding: 3px 10px; }
+.notesfields { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.notesfields label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--muted); }
+.notesfields textarea { width: 100%; resize: vertical; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; font-size: .88rem; line-height: 1.45; }
+.notesfields textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.addnotes { align-self: flex-start; padding: 2px 0; }
+.mynotes { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; background: var(--bg); }
+.mynotes-head { display: flex; flex-direction: column; gap: 2px; }
+.mynotes .actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.mynotes .hint { margin: 0; }

@@ -5,6 +5,7 @@ export interface Video {
   author?: string; duration_seconds?: number;
   links?: VideoLink[]; chapters?: { start: number; title: string }[];
   insights_ready?: boolean; deep_summary?: string;
+  user_description?: string; user_notes?: string;
   status?: "processing" | "ready" | "failed";
   stage?: string; progress?: number; stage_label?: string; stage_detail?: string; error?: string;
 }
@@ -22,7 +23,11 @@ const post = (url: string, body: unknown) =>
 export const api = {
   video: (id: string) => fetch(`/api/videos/${id}`).then((r) => json<Video>(r)),
   videos: () => fetch("/api/videos").then((r) => json<Video[]>(r)),
-  addVideo: (url: string) => post("/api/videos", { url }).then((r) => json<Video>(r)),
+  addVideo: (url: string, mine?: { description?: string; notes?: string }) =>
+    post("/api/videos", { url, ...(mine?.description?.trim() ? { description: mine.description } : {}), ...(mine?.notes?.trim() ? { notes: mine.notes } : {}) }).then((r) => json<Video>(r)),
+  saveNotes: (id: string, mine: { description: string; notes: string }) =>
+    fetch(`/api/videos/${id}/notes`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mine) })
+      .then((r) => json<{ user_description: string; user_notes: string }>(r)),
   retryVideo: (id: string) => post(`/api/videos/${id}/retry`, {}).then((r) => json<unknown>(r)),
   deleteVideo: (id: string) => fetch(`/api/videos/${id}`, { method: "DELETE" }).then((r) => json<void>(r)),
   chats: () => fetch("/api/chats").then((r) => json<Chat[]>(r)),
@@ -35,6 +40,8 @@ export const api = {
 export interface StreamHandlers {
   onMeta?: (m: { userId?: string; assistantId: string }) => void;
   onDelta: (d: string) => void;
+  /** the server corrected the finished answer: replace everything shown so far */
+  onReplace?: (text: string) => void;
 }
 export interface StreamEnd { status: MsgStatus; error: string }
 
@@ -62,6 +69,7 @@ export async function streamAnswer(url: string, body: unknown, h: StreamHandlers
         const p = JSON.parse(ev.slice(6));
         if (p.meta) h.onMeta?.(p.meta);
         else if (p.delta) h.onDelta(p.delta);
+        else if (typeof p.replace === "string") h.onReplace?.(p.replace);
         else if (p.done) return { status: p.status, error: p.error ?? "" };
       }
     }
