@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, continueMessage, sendMessage, type Chat, type Message, type Video } from "../api";
 import { copyText, readClipboard } from "../clipboard";
+import { defaultQuestion, modeLabel, type Mode } from "../modes";
 import { DetailsPanel } from "./DetailsPanel";
 import { Markdown } from "./Markdown";
+import { ModeTags } from "./ModeTags";
 import { ProgressBar } from "./ProgressBar";
 
 const SUGGESTIONS = [
@@ -11,9 +13,6 @@ const SUGGESTIONS = [
   "Explain the main concept step by step",
   "What are the key practices and rules the speakers recommend?",
 ];
-
-/** Designs interview questions from the video (and the user's notes); the server recognises it as interview mode. */
-const INTERVIEW_PROMPT = "Interview prep: the top 5 innovative, critical, high-level thinking questions from this video";
 
 type Props = { chat: Chat; video: Video | null; onNewChat: () => void; onUpdated: () => void };
 
@@ -24,7 +23,8 @@ export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
   const [streaming, setStreaming] = useState(false); // this page is watching the answer arrive
   const [error, setError] = useState("");
   const [showSummary, setShowSummary] = useState(false);
-  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; text: string; mode: Mode | null } | null>(null);
+  const [mode, setMode] = useState<Mode | null>(null); // answer-type tag chosen for the next message
   const [copied, setCopied] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -65,24 +65,27 @@ export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
     else void reload(); // the stream ended early; the server keeps writing, so read the result from it
   };
 
-  const send = async (text: string, editFromId?: string) => {
-    const content = text.trim();
+  const send = async (text: string, opts: { editFromId?: string; mode?: Mode | null } = {}) => {
+    const editFromId = opts.editFromId;
+    const tag = opts.mode !== undefined ? opts.mode : mode; // an explicit tag (edit, starter chip) wins over the bar
+    const content = text.trim() || (tag ? defaultQuestion(tag) : ""); // a tag can be sent with no text
     if (!content || streaming || generating) return;
     setInput("");
+    setMode(null);
     setEditing(null);
     setError("");
     setStreaming(true);
     setMessages((ms) => {
       const base = editFromId ? ms.slice(0, Math.max(0, ms.findIndex((m) => m.id === editFromId))) : ms;
-      return [...base, { role: "user", content, status: "done" }, { role: "assistant", content: "", status: "generating" }];
+      return [...base, { role: "user", content, status: "done", mode: tag }, { role: "assistant", content: "", status: "generating" }];
     });
     try {
-      const end = await sendMessage(chat.id, content, {
+      const end = await sendMessage(chat.id, text.trim(), {
         onMeta: ({ userId, assistantId }) =>
           setMessages((ms) => ms.map((m, i) => (i === ms.length - 2 ? { ...m, id: userId } : i === ms.length - 1 ? { ...m, id: assistantId } : m))),
         onDelta: (d) => patchLast((m) => ({ ...m, content: m.content + d })),
         onReplace: (text) => patchLast((m) => ({ ...m, content: text })),
-      }, editFromId);
+      }, { editFromId, mode: tag });
       finish(end);
     } catch (err) {
       setError((err as Error).message);
@@ -177,9 +180,9 @@ export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
                 ))}
               </div>
               {video && (
-                <button className="suggest-wide" onClick={() => send(INTERVIEW_PROMPT)}>
-                  <span className="tag">Interview prep</span>
-                  The top 5 innovative, critical, high-level thinking questions from this video
+                <button className="suggest-wide" onClick={() => send("", { mode: "interview" })}>
+                  <span className="tag">Interview</span>
+                  A deep summary in bullet points, then the top 5 innovative, critical, high-level thinking questions
                 </button>
               )}
             </div>
@@ -194,25 +197,27 @@ export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
                       <textarea
                         autoFocus
                         value={editing.text}
-                        onChange={(e) => setEditing({ id: editing.id, text: e.target.value })}
+                        onChange={(e) => setEditing({ ...editing, text: e.target.value })}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send(editing.text, editing.id); }
+                          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send(editing.text, { editFromId: editing.id, mode: editing.mode }); }
                           if (e.key === "Escape") setEditing(null);
                         }}
                         rows={Math.min(10, Math.max(2, editing.text.split("\n").length))}
                       />
+                      <ModeTags value={editing.mode} onChange={(m) => setEditing({ ...editing, mode: m })} disabled={busy} />
                       <div className="editactions">
                         <span className="hint">Editing asks again and replaces everything after this message.</span>
                         <button className="ghost" onClick={() => setEditing(null)}>Cancel</button>
-                        <button className="primary" disabled={!editing.text.trim() || busy} onClick={() => send(editing.text, editing.id)}>Save and resend</button>
+                        <button className="primary" disabled={(!editing.text.trim() && !editing.mode) || busy} onClick={() => send(editing.text, { editFromId: editing.id, mode: editing.mode })}>Save and resend</button>
                       </div>
                     </div>
                   ) : (
                     <div className="ubody">
+                      {m.mode && <span className="msgmode">{modeLabel(m.mode)}</span>}
                       <div className="bubble">{m.content}</div>
                       <div className="mactions">
                         <button onClick={() => copy(key, m.content)}>{copied === key ? "Copied" : "Copy"}</button>
-                        {m.id && <button disabled={busy} onClick={() => setEditing({ id: m.id!, text: m.content })}>Edit</button>}
+                        {m.id && <button disabled={busy} onClick={() => setEditing({ id: m.id!, text: m.content, mode: m.mode ?? null })}>Edit</button>}
                       </div>
                     </div>
                   )}
@@ -247,9 +252,10 @@ export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
       <div className="composer-wrap">
         <div className="column">
           {error && <p className="banner">{error}</p>}
+          <ModeTags value={mode} onChange={setMode} disabled={busy} />
           <form
             className="composer"
-            onSubmit={(e) => { e.preventDefault(); if (!busy) void send(input); }}
+            onSubmit={(e) => { e.preventDefault(); if (!busy && (input.trim() || mode)) void send(input); }}
           >
             <textarea
               ref={taRef}
@@ -257,15 +263,15 @@ export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!busy) void send(input); }
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!busy && (input.trim() || mode)) void send(input); }
               }}
-              placeholder={video ? "Ask about this video…" : "Ask across all your videos…"}
+              placeholder={mode ? `${modeLabel(mode)}: add a focus (optional), or just press send` : video ? "Ask about this video…" : "Ask across all your videos…"}
             />
             <button type="button" className="iconbtn" onClick={paste} title="Paste from clipboard" aria-label="Paste from clipboard">📋</button>
             {busy ? (
               <button type="button" className="send stop" onClick={stop} title="Stop answering" aria-label="Stop">■</button>
             ) : (
-              <button className="send" disabled={!input.trim()} aria-label="Send">↑</button>
+              <button className="send" disabled={!input.trim() && !mode} aria-label="Send">↑</button>
             )}
           </form>
           <p className="fineprint">Answers are written on the server, so you can close this page and come back. They come from video transcripts and can be wrong.</p>

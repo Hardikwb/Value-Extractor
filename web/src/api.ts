@@ -11,7 +11,8 @@ export interface Video {
 }
 export interface Chat { id: string; video_id: string | null; title: string; created_at?: string; updated_at: string; generating?: boolean }
 export type MsgStatus = "generating" | "done" | "incomplete" | "stopped";
-export interface Message { id?: string; role: "user" | "assistant"; content: string; status?: MsgStatus; error?: string }
+import type { Mode } from "./modes";
+export interface Message { id?: string; role: "user" | "assistant"; content: string; status?: MsgStatus; error?: string; mode?: Mode | null }
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as any).error ?? res.statusText);
@@ -78,8 +79,8 @@ export async function streamAnswer(url: string, body: unknown, h: StreamHandlers
   }
 }
 
-export const sendMessage = (chatId: string, content: string, h: StreamHandlers, editFromId?: string) =>
-  streamAnswer(`/api/chats/${chatId}/messages`, { content, ...(editFromId ? { editFromId } : {}) }, h);
+export const sendMessage = (chatId: string, content: string, h: StreamHandlers, opts: { editFromId?: string; mode?: Mode | null } = {}) =>
+  streamAnswer(`/api/chats/${chatId}/messages`, { content, ...(opts.editFromId ? { editFromId: opts.editFromId } : {}), ...(opts.mode ? { mode: opts.mode } : {}) }, h);
 
 export const continueMessage = (chatId: string, messageId: string, h: StreamHandlers) =>
   streamAnswer(`/api/chats/${chatId}/messages/${messageId}/continue`, {}, h);
