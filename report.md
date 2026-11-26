@@ -191,6 +191,25 @@ This report covers the problems hit while getting the server to start and connec
 - **Verified on the KodeKloud Short:** Interview with no text gave 25 summary bullets under five headings, then exactly 5 questions with every part, no quotation marks and no meaningless timestamps; Interview plus a focus ("security and privacy") steered both parts (15 mentions); Deep summary had no questions; Cheat sheet and Quiz matched their formats; Stop then Continue kept the Interview format (finished with 5 questions); editing a message to another tag replaced the exchange and stored the new tag; a server restart mid-answer resumed as a full Interview answer; an ordinary question was unchanged; an unknown tag or an empty message with no tag is rejected with `400`. 80 server tests and 6 web tests pass.
 - **Limits:** the tag row and chips were built and type-checked but not viewed in a browser. Output varies between runs. The Interview answer is long (7,000 to 10,000 characters), so it uses a lot of the free daily token budget. Test chats created while verifying are still in the chat list (delete with the × in the sidebar).
 
+## 20. Videos with Hindi (or Hinglish) captions: "No English captions on this video (available: hi)"
+
+- **Symptom:** adding a video failed with `Could not read the transcript. No English captions on this video (available: hi)`.
+- **Cause:** the app only accepted an English caption track (an earlier fix, after an English video came back in Arabic). Two kinds of video fall outside that: genuinely Hindi videos, and very common **Hinglish** videos, where the audio is English but YouTube's auto-captions are labelled Hindi and written in Devanagari script (English words spelled phonetically, such as the Devanagari spelling of "three important"). The failing video here was the second kind.
+- **Fix (`services/youtube.ts`, `translate-utils.ts`, `translate.ts`, `transcript.ts`):** the transcript now comes from the first of these that works:
+  1. an English caption track (including en-US, en-GB and so on);
+  2. **YouTube's own English translation** of the track that exists (requested with `tlang=en` on the caption download only, retried with growing pauses of 4, 10 and 20 seconds when YouTube answers 429 or a server error, but not when it genuinely does not offer translation);
+  3. **the language model's translation** (batches of about 40 lines or 3,500 characters, translated as flowing text and spread back over the original timestamps, because models merge lines and a line-for-line match cannot be demanded). It is used only for transcripts up to 60,000 characters, so a very long non-English video does not use up the free token budget;
+  4. otherwise the original-language text is kept and the video is labelled "Transcript in <language>".
+  The source language and whether the text was translated are stored on the video, and the chat header shows an "Auto-translated from Hindi" label (with a note that names and technical terms can be garbled). Rebuilding a video's breakdown uses the same path.
+- **How it was found and checked:** the failed video was `egv-CcolJZQ`, still in the list with its error. A direct test showed that the translation parameter returns clean English; later runs showed YouTube throttling it (HTTP 429, 5 of 6 tries, probably made worse by my repeated testing), which is why the retries and the model fallback exist. The first version of the model fallback was silently rejected because the model returns fewer lines than it is given; the log now says when a reply is unusable. After the fix the video went from failed to ready with `translated: true`, English chunks at sensible timestamps, a correct summary, and a grounded answer to a question with a citation. 95 server tests pass (new ones cover the caption-URL rewriting, retry rules, size cap, batching, reply parsing and the redistribution of translated text).
+- **Limits:**
+  - Machine translation of machine captions: product names and acronyms can be wrong (this video's "RAG" was heard as "drag" by YouTube's own captions, and that error is in the stored text).
+  - The model fallback costs tokens (about 1,500 for a 3-minute video).
+  - For a very long non-English video the original text is kept, so search is weaker.
+  - Answers are given in English by default; asking in Hindi usually gets a Hindi reply, but that was not tested.
+  - The first attempt for a throttled video takes about 40 seconds longer.
+- **Using it:** open the failed video and press "Try again" (or add the link again); no other action is needed.
+
 ## Final working setup
 
 | Area | Choice | File |
