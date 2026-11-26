@@ -210,6 +210,20 @@ This report covers the problems hit while getting the server to start and connec
   - The first attempt for a throttled video takes about 40 seconds longer.
 - **Using it:** open the failed video and press "Try again" (or add the link again); no other action is needed.
 
+## 21. UI polish: wider sidebar, larger type, more spacing
+
+- **Request:** make the UI better by widening the left sidebar and improving font size and spacing (shown with a screenshot at 1920x1080).
+- **What the screenshot and the stylesheet showed:** a fixed 290px sidebar that cut chat and video titles off on one line ("Interview prep: a deep su"), 11 to 14px text in the sidebar and header, 15px base text, answer bullets only a few pixels apart, 22px between messages, and a default white scrollbar on a dark theme.
+- **Changes (`web/src/styles.css` rewritten in sections around design tokens, every existing class kept):**
+  - Sidebar: 340px by default (was 290), **draggable between 260 and 520px** (drag, arrow keys, Home/End, double-click to reset) and remembered in the browser; roomier padding and gaps; chat and video titles **wrap to two lines** instead of being clipped; larger text throughout; thin themed scrollbars.
+  - Chat: base text 16px (was 15), answers 17.6px (was 16.3) with line height 1.75, more space between bullets and nested bullets, larger headings, header title and chips, message bubbles and action buttons; 30px between messages; larger composer, tag chips and starter cards; roomier Details panel and notes boxes.
+  - Phones: the sidebar overlay uses up to 88% of the width, and the menu button no longer covers the title.
+  - New: `components/SidebarResizer.tsx` and `sidebarWidth.ts` (clamping and remembering the width, with unit tests).
+- **Verified in a real browser** (headless Chrome driven over its remote-debugging protocol) at 1920x1080 dark and light, 1280x800 and a 390px phone, before and after: no horizontal overflow at any size; and 13 scripted checks of the resizer all passed (default 340, drag, both limits, persistence across a reload, keyboard, reset) plus the Details panel opening.
+- **Two defects found by looking, and fixed:** a stray third line of a long title showing through the padding of the two-line clamp in the library list (the clamp now sits on an inner element), and the phone menu button overlapping the "Video Chat" title.
+- **Also found by the tests:** the width helper treated `null` as 0 and clamped it to the minimum instead of using the default.
+- **Limits:** the numbers are a first pass and easy to tune. Two-line titles make rows taller, so fewer chats fit before the sidebar scrolls. The screenshot tooling was a temporary script and was not added to the repo.
+
 ## Final working setup
 
 | Area | Choice | File |
