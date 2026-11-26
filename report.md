@@ -179,6 +179,18 @@ This report covers the problems hit while getting the server to start and connec
 - **Limits:** model output varies between runs; wording of the questions and the choice of angles differ each time. The guard covers rates only, not every possible invented detail. The UI (chip, notes editor) was built and type-checked but not viewed in a browser.
 - **Cleanup:** the Short was already in the library, so my test notes were attached to your video and have been cleared again. A few test chats created on it during verification remain (delete them with the × in the sidebar).
 
+## 19. Answer-type tags in the chat bar (Interview first)
+
+- **Request:** put tags in the search bar so that choosing "Interview" gives a deep bullet-point summary first and then the top 5 innovative, critical, high-level thinking questions; other tags welcome.
+- **What was built:** four tags above the chat box, picked per message and shown as a label on your message: **Interview** (a `## Summary` in bullets, then `## Top 5 interview questions`), **Deep summary** (bullets only), **Cheat sheet** (key terms, numbers, rules, commands, mistakes) and **Quiz** (8 flashcards plus 3 self-test questions). A tag can be sent with no text (its own request is stored as the message, and gives the chat its title), or with text, which is treated as a focus ("focus on security and privacy"). The old starter chip now just selects Interview and sends. Typed wording such as "give me 5 hard interview questions" still triggers Interview.
+- **Design points:**
+  - The tag is stored with the message (`messages.mode`) and read back whenever an answer is re-run, so **Continue, restart recovery and Edit keep the same tag**. Before, those paths re-ran from the question text alone and would have lost it.
+  - All tags answer from the whole-video breakdown, with the video's own number-bearing sentences supplied for copying, and the same rules as before (no quotation marks, no added units or rates, "Beyond the video:" for outside knowledge).
+  - Server: `services/modes.ts` (pure, tested); web: `modes.ts`, `ModeTags.tsx`, changes in `ChatWindow.tsx`.
+- **Found while testing, and fixed:** the summary's "Numbers, tools and names" section pasted whole transcript sentences and repeated figures; the rule now asks for one short bullet per figure.
+- **Verified on the KodeKloud Short:** Interview with no text gave 25 summary bullets under five headings, then exactly 5 questions with every part, no quotation marks and no meaningless timestamps; Interview plus a focus ("security and privacy") steered both parts (15 mentions); Deep summary had no questions; Cheat sheet and Quiz matched their formats; Stop then Continue kept the Interview format (finished with 5 questions); editing a message to another tag replaced the exchange and stored the new tag; a server restart mid-answer resumed as a full Interview answer; an ordinary question was unchanged; an unknown tag or an empty message with no tag is rejected with `400`. 80 server tests and 6 web tests pass.
+- **Limits:** the tag row and chips were built and type-checked but not viewed in a browser. Output varies between runs. The Interview answer is long (7,000 to 10,000 characters), so it uses a lot of the free daily token budget. Test chats created while verifying are still in the chat list (delete with the × in the sidebar).
+
 ## Final working setup
 
 | Area | Choice | File |
