@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, continueMessage, sendMessage, type Chat, type Message, type Video } from "../api";
 import { copyText, readClipboard } from "../clipboard";
+import { languageName } from "../lang";
 import { defaultQuestion, modeLabel, type Mode } from "../modes";
 import { DetailsPanel } from "./DetailsPanel";
 import { Markdown } from "./Markdown";
@@ -150,6 +151,16 @@ export function ChatWindow({ chat, video, onNewChat, onUpdated }: Props) {
           {video && (
             <div className="chips">
               <span className="chip accent">{video.category}</span>
+              {video.transcript_translated && (
+                <span className="chip warn" title="This video has no English captions, so the transcript was translated to English automatically. Names and technical terms can be garbled.">
+                  Auto-translated from {languageName(video.transcript_lang ?? "")}
+                </span>
+              )}
+              {!video.transcript_translated && video.transcript_lang && !/^en/i.test(video.transcript_lang) && (
+                <span className="chip warn" title="The transcript is in its original language. Answers still work, but search can be less accurate.">
+                  Transcript in {languageName(video.transcript_lang)}
+                </span>
+              )}
               {video.tags.map((t) => <span className="chip" key={t}>{t}</span>)}
               <button className="textbtn" onClick={() => setShowSummary((s) => !s)}>
                 {showSummary ? "Hide details" : "Details"}

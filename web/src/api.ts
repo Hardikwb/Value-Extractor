@@ -6,6 +6,7 @@ export interface Video {
   links?: VideoLink[]; chapters?: { start: number; title: string }[];
   insights_ready?: boolean; deep_summary?: string;
   user_description?: string; user_notes?: string;
+  transcript_lang?: string; transcript_translated?: boolean;
   status?: "processing" | "ready" | "failed";
   stage?: string; progress?: number; stage_label?: string; stage_detail?: string; error?: string;
 }
