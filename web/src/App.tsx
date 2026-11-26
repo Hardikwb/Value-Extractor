@@ -5,7 +5,9 @@ import { AddVideoForm } from "./components/AddVideoForm";
 import { ChatWindow } from "./components/ChatWindow";
 import { ProcessingView } from "./components/ProcessingView";
 import { RecentChats } from "./components/RecentChats";
+import { SidebarResizer } from "./components/SidebarResizer";
 import { VideoList } from "./components/VideoList";
+import { readWidth, writeWidth } from "./sidebarWidth";
 
 const isReady = (v: Video) => v.status === undefined || v.status === "ready";
 
@@ -20,6 +22,8 @@ export default function App() {
   const [viewingId, setViewingId] = useState<string | null>(null); // a video that is still processing
   const [menuOpen, setMenuOpen] = useState(false);
   const [synced, setSynced] = useState(false);
+  const [sidebarW, setSidebarW] = useState(() => readWidth());
+  useEffect(() => { writeWidth(sidebarW); }, [sidebarW]);
 
   const refresh = useCallback(async () => {
     const [v, c] = await Promise.all([api.videos(), api.chats()]);
@@ -99,7 +103,8 @@ export default function App() {
   };
 
   return (
-    <div className="layout">
+    <div className="layout" style={{ "--sidebar-w": `${sidebarW}px` } as React.CSSProperties}>
+      <SidebarResizer width={sidebarW} onChange={setSidebarW} />
       <button className="menu" onClick={() => setMenuOpen((o) => !o)} aria-label="Menu">☰</button>
       <aside className={menuOpen ? "open" : ""}>
         <div className="brand"><span className="logo">✺</span> Video Chat</div>

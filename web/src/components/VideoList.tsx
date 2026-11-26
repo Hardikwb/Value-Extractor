@@ -19,7 +19,7 @@ function Row({ v, active, onSelect, onDelete, onRetry }: { v: Video; active: boo
   return (
     <div className={`video ${active ? "active" : ""} ${working || failed ? "tall" : ""}`}>
       <div className="vmain">
-        <button className="vtitle" onClick={onSelect} title={title}>{title}</button>
+        <button className="vtitle" onClick={onSelect} title={title}><span className="clamp">{title}</span></button>
         {working && (
           <div className="vprog">
             <ProgressBar value={v.progress ?? 0} busy={!!v.stage_detail} label={v.stage_label} />
