@@ -14,7 +14,7 @@ export const SUMMARY_RULES = `Bullet points only (no paragraphs). Use these bold
 - **Overview**: 2 to 3 bullets on what the video is about and who it is for.
 - **How it works**: the main idea step by step, or the problem, the cause and the fix kept apart.
 - **Key concepts and terms**: each with its meaning as the video explains it.
-- **Numbers, tools and names**: copy numbers from the exact-wording list unchanged; include only tools and names the material mentions.
+- **Numbers, tools and names**: one short bullet per figure, tool or name, never a pasted sentence and never the same figure twice. Write each figure as it appears in the exact-wording list (for example the number and what it counts); include only tools and names the material mentions.
 - **Takeaways**: 3 to 5 bullets.
 Every bullet must be concrete and specific to this video: no filler and no generic advice. Say only what the material says in this part; outside knowledge belongs in the questions part, where it is marked "Beyond the video:".`;
 
