@@ -224,6 +224,14 @@ This report covers the problems hit while getting the server to start and connec
 - **Also found by the tests:** the width helper treated `null` as 0 and clamped it to the minimum instead of using the default.
 - **Limits:** the numbers are a first pass and easy to tune. Two-line titles make rows taller, so fewer chats fit before the sidebar scrolls. The screenshot tooling was a temporary script and was not added to the repo.
 
+## 22. Phone layout
+
+- **Symptom:** on a phone the chat was hard to use (screenshot at about 412px wide).
+- **Measured, before:** at 412x915 the header took 289px and the composer 273px, leaving 385px (42% of the screen) for reading; on a smaller 360x740 phone the header was 348px and the composer 299px, leaving **125px (17%)**, barely a paragraph. The causes: a large title plus five chips wrapping onto five lines, a "New chat" button beside it, four tags wrapping onto two rows, a three-line fine print, an avatar column and deep list indents squeezing the answer text.
+- **Fix (`@media (max-width: 600px)` in `styles.css`):** a two-line title with a single horizontally scrolling row of chips and a smaller "New chat"; the avatar column removed; answer text 1rem with flatter list indents and tighter spacing; the four tags in one scrolling row; a slimmer composer; the fine print hidden. Nothing changes on larger screens.
+- **Measured, after (real headless Chrome, both sizes):** reading area 714px (78%) at 412x915 and 539px (73%) at 360x740; header 95px and composer 126px at both; no horizontal overflow; the sidebar menu opens cleanly.
+- **Limits:** tapping outside the open menu does not close it (the menu button does); the chip and tag rows scroll sideways, so the last chip can be partly off-screen until swiped; checked in an emulated phone, not on a physical device.
+
 ## Final working setup
 
 | Area | Choice | File |
