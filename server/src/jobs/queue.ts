@@ -7,6 +7,10 @@ export interface Queue {
   idle(): Promise<void>;
 }
 
+/** On serverless hosts the function must be told to stay alive while a task runs (set once at startup). */
+let keepAlive: (p: Promise<unknown>) => void = () => {};
+export const setKeepAlive = (fn: (p: Promise<unknown>) => void) => { keepAlive = fn; };
+
 export function createQueue(concurrency: number, onError: (key: string, e: unknown) => void = () => {}): Queue {
   const pending: { key: string; task: () => Promise<void> }[] = [];
   const known = new Set<string>(); // queued or running
@@ -20,9 +24,10 @@ export function createQueue(concurrency: number, onError: (key: string, e: unkno
     while (running < concurrency && pending.length) {
       const { key, task } = pending.shift()!;
       running++;
-      task()
+      const run = task()
         .catch((e) => onError(key, e))
         .finally(() => { running--; known.delete(key); pump(); settle(); });
+      keepAlive(run);
     }
   };
 
