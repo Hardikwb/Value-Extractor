@@ -22,6 +22,15 @@ if (onVercel) {
   setKeepAlive(waitUntil);
   let ready: Promise<void> | undefined;
   app.use((_req, _res, next) => { (ready ??= migrate().catch((e) => { ready = undefined; throw e; })).then(() => next(), next); });
+  // Hobby crons run at most daily, so also resume stalled work whenever the app is in use (at most once a minute).
+  let lastRecover = 0;
+  app.use((req, _res, next) => {
+    if (req.path !== "/api/health" && req.path !== "/api/cron/recover" && Date.now() - lastRecover > 60_000) {
+      lastRecover = Date.now();
+      waitUntil(recoverJobs().catch((e) => console.error("Job recovery failed:", e?.message ?? e)));
+    }
+    next();
+  });
   app.get("/api/cron/recover", (req, res, next) => {
     if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) return void res.status(401).json({ error: "Unauthorized" });
     const job = recoverJobs();
